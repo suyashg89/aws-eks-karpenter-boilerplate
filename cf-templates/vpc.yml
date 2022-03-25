@@ -1,0 +1,581 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: This template creates a VPC with Web, App, Database and Pod subnets in a specific region spread across two AZs with one subnet in each AZ.
+Parameters:
+  EksClusterName:
+    Description: Amazon EKS cluster name.
+    Type: String
+    Default: ""
+  Environment:
+    Description: VPC/Environment name for which the stack is going to be created/updated.
+    Type: String
+    Default: "sandbox"
+  AvailabilityZones:
+    Description: List of Availability Zones to use for the subnets in the VPC.
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+  VpcPrimaryCidr:
+    Default: 10.8.0.0/21
+    Description: Primary CIDR range for the VPC used to create Public, App and DB subnets.
+    Type: String
+  PublicSubnet1Cidr:
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.8.0.0/26
+    Description: CIDR block from Primary CIDR for the public subnet 1 located in Availability Zone 1.
+    Type: String
+  PublicSubnet2Cidr:
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.8.0.64/26
+    Description: CIDR block from Primary CIDR for the public subnet 2 located in Availability Zone 2.
+    Type: String
+  WebSubnet1Cidr:
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.8.1.0/25
+    Description: CIDR block from Primary CIDR for Web subnet 1 located in Availability Zone 1.
+    Type: String
+  WebSubnet2Cidr:
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.8.1.128/25
+    Description: CIDR block from Primary CIDR for Web subnet 1 located in Availability Zone 2.
+    Type: String
+  AppSubnet1Cidr:
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.8.2.0/24
+    Description: CIDR block from Primary CIDR for App subnet 1 located in Availability Zone 1.
+    Type: String
+  AppSubnet2Cidr:
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.8.3.0/24
+    Description: CIDR block from Primary CIDR for App subnet 2 located in Availability Zone 2.
+    Type: String
+  DbSubnet1Cidr:
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.8.0.128/26
+    Description: CIDR block from Primary CIDR for DB subnet 1 located in Availability Zone 1.
+    Type: String
+  DbSubnet2Cidr:
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.8.0.192/26
+    Description: CIDR block from Primary CIDR for DB subnet 2 located in Availability Zone 2.
+    Type: String
+  VpcTenancy:
+    AllowedValues:
+      - default
+      - dedicated
+    Default: default
+    Description: The allowed tenancy of instances launched into the VPC.
+    Type: String
+Resources:
+  DhcpOptions:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: !Sub "${AWS::Region}.compute.internal"
+      DomainNameServers:
+        - AmazonProvidedDNS
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-dhcp-options-sets"
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcPrimaryCidr
+      InstanceTenancy: !Ref VpcTenancy
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-vpc"
+  VpcDhcpOptionsAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      VpcId: !Ref Vpc
+      DhcpOptionsId: !Ref DhcpOptions
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-internet-gateway"
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref 'InternetGateway'
+  WebSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref WebSubnet1Cidr
+      AvailabilityZone: !Select
+        - '0'
+        - !Ref AvailabilityZones
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-web-subnet1"
+  WebSubnet1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-web-subnet1-route-table"
+        - Key: Network
+          Value: Private
+  WebSubnet1Route:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref WebSubnet1RouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway1
+  WebSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref WebSubnet1
+      RouteTableId: !Ref WebSubnet1RouteTable
+  WebSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref WebSubnet2Cidr
+      AvailabilityZone: !Select
+        - '0'
+        - !Ref AvailabilityZones
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-web-subnet2"
+  WebSubnet2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-web-subnet2-route-table"
+        - Key: Network
+          Value: Private
+  WebSubnet2Route:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref WebSubnet2RouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway2
+  WebSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref WebSubnet2
+      RouteTableId: !Ref WebSubnet2RouteTable
+  AppSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref AppSubnet1Cidr
+      AvailabilityZone: !Select
+        - '0'
+        - !Ref AvailabilityZones
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-app-subnet1"
+        - Key: !Sub kubernetes.io/cluster/${EksClusterName}
+          Value: "owned"
+        - Key: "karpenter.sh/discovery"
+          Value: !Sub ${EksClusterName}
+  AppSubnet1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-app-subnet1-route-table"
+        - Key: Network
+          Value: Private
+  AppSubnet1Route:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppSubnet1RouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway1
+  AppSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnet1
+      RouteTableId: !Ref AppSubnet1RouteTable
+  AppSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref AppSubnet2Cidr
+      AvailabilityZone: !Select
+        - '1'
+        - !Ref AvailabilityZones
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-app-subnet2"
+        - Key: !Sub kubernetes.io/cluster/${EksClusterName}
+          Value: "owned"
+        - Key: "karpenter.sh/discovery"
+          Value: !Sub ${EksClusterName}
+  AppSubnet2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-app-subnet2-route-table"
+        - Key: Network
+          Value: Private
+  AppSubnet2Route:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppSubnet2RouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway2
+  AppSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnet2
+      RouteTableId: !Ref AppSubnet2RouteTable
+  DbSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref DbSubnet1Cidr
+      AvailabilityZone: !Select
+        - '0'
+        - !Ref AvailabilityZones
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-db-subnet1"
+  DbSubnet1RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-db-subnet1-route-table"
+        - Key: Network
+          Value: Private
+  DbSubnet1Route:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref DbSubnet1RouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway1
+  DbSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DbSubnet1
+      RouteTableId: !Ref DbSubnet1RouteTable
+  DbSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref DbSubnet2Cidr
+      AvailabilityZone: !Select
+        - '1'
+        - !Ref AvailabilityZones
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-db-subnet2"
+  DbSubnet2RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-db-subnet2-route-table"
+        - Key: Network
+          Value: Private
+  DbSubnet2Route:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref DbSubnet2RouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway2
+  DbSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DbSubnet2
+      RouteTableId: !Ref DbSubnet2RouteTable
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !Select
+        - '0'
+        - !Ref AvailabilityZones
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-public-subnet1"
+        - Key: kubernetes.io/role/elb
+          Value: "1"
+      MapPublicIpOnLaunch: true
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !Select
+        - '1'
+        - !Ref AvailabilityZones
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-public-subnet2"
+        - Key: kubernetes.io/role/elb
+          Value: "1"
+      MapPublicIpOnLaunch: true
+  PublicSubnetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-public-subnet-route-table"
+        - Key: Network
+          Value: Public
+  PublicSubnetRoute:
+    DependsOn: VpcGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicSubnetRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicSubnetRouteTable
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicSubnetRouteTable
+  Nat1Eip:
+    DependsOn: VpcGatewayAttachment
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-nat1-eip"
+  Nat2Eip:
+    DependsOn: VpcGatewayAttachment
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-nat2-eip"
+  NatGateway1:
+    DependsOn: VpcGatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt Nat1Eip.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-nat-gateway1"
+  NatGateway2:
+    DependsOn: VpcGatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt Nat2Eip.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-nat-gateway2"
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: '*'
+            Effect: Allow
+            Resource: '*'
+            Principal: '*'
+      RouteTableIds:
+        - !Ref AppSubnet1RouteTable
+        - !Ref AppSubnet2RouteTable
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcId: !Ref Vpc
+  SgVpcEndpoint:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow https port for all the vpc cidrs to acces the vpc endpoints
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: !Ref VpcPrimaryCidr
+  Ec2VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      SubnetIds:
+        - !Ref AppSubnet1
+        - !Ref AppSubnet2
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref SgVpcEndpoint
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ec2"
+      VpcEndpointType: Interface
+      VpcId: !Ref Vpc
+  Ec2MessegesVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      SubnetIds:
+        - !Ref AppSubnet1
+        - !Ref AppSubnet2
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref SgVpcEndpoint
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ec2messages"
+      VpcEndpointType: Interface
+      VpcId: !Ref Vpc
+  SsmVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      SubnetIds:
+        - !Ref AppSubnet1
+        - !Ref AppSubnet2
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref SgVpcEndpoint
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssm"
+      VpcEndpointType: Interface
+      VpcId: !Ref Vpc
+  SsmMessagesVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      SubnetIds:
+        - !Ref AppSubnet1
+        - !Ref AppSubnet2
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref SgVpcEndpoint
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssmmessages"
+      VpcEndpointType: Interface
+      VpcId: !Ref Vpc
+  EcrApiVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      SubnetIds:
+        - !Ref AppSubnet1
+        - !Ref AppSubnet2
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref SgVpcEndpoint
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.api"
+      VpcEndpointType: Interface
+      VpcId: !Ref Vpc
+  EcrDkrVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      SubnetIds:
+        - !Ref AppSubnet1
+        - !Ref AppSubnet2
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref SgVpcEndpoint
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.dkr"
+      VpcEndpointType: Interface
+      VpcId: !Ref Vpc
+Outputs:
+  VpcId:
+    Value: !Ref Vpc
+    Description: VPC ID of the created VPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VpcId"
+  VpcPrimaryCidr:
+    Value: !Ref VpcPrimaryCidr
+    Description: VPC Primary CIDR range
+    Export:
+      Name: !Sub "${AWS::StackName}-VpcPrimaryCidr"
+  PublicSubnet1Id:
+    Description: Public subnet 1 ID in Availability Zone 1
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet1Id"
+  PublicSubnet1Cidr:
+    Description: Public subnet 1 CIDR in Availability Zone 1
+    Value: !Ref PublicSubnet1Cidr
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet1Cidr"
+  PublicSubnet2Id:
+    Description: Public subnet 2 ID in Availability Zone 2
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet2Id"
+  PublicSubnet2Cidr:
+    Description: Public subnet 2 CIDR in Availability Zone 2
+    Value: !Ref PublicSubnet2Cidr
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet2Cidr"
+  WebSubnet1Id:
+    Description: Web subnet 1 ID in Availability Zone 1
+    Value: !Ref WebSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-WebSubnet1Id"
+  WebSubnet1Cidr:
+    Description: Web subnet 1 CIDR in Availability Zone 1
+    Value: !Ref WebSubnet1Cidr
+    Export:
+      Name: !Sub "${AWS::StackName}-WebSubnet1Cidr"
+  WebSubnet2Id:
+    Description: Web subnet 2 ID in Availability Zone 2
+    Value: !Ref WebSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-WebSubnet2Id"
+  WebSubnet2Cidr:
+    Description: Web subnet 2 CIDR in Availability Zone 2
+    Value: !Ref WebSubnet2Cidr
+    Export:
+      Name: !Sub "${AWS::StackName}-WebSubnet2Cidr"
+  AppSubnet1Id:
+    Description: App subnet 1 ID in Availability Zone 1
+    Value: !Ref AppSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-AppSubnet1Id"
+  AppSubnet1Cidr:
+    Description: App subnet 1 CIDR in Availability Zone 1
+    Value: !Ref AppSubnet1Cidr
+    Export:
+      Name: !Sub "${AWS::StackName}-AppSubnet1Cidr"
+  AppSubnet2Id:
+    Description: App subnet 2 ID in Availability Zone 2
+    Value: !Ref AppSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-AppSubnet2Id"
+  AppSubnet2Cidr:
+    Description: App subnet 2 CIDR in Availability Zone 2
+    Value: !Ref AppSubnet2Cidr
+    Export:
+      Name: !Sub "${AWS::StackName}-AppSubnet2Cidr"
+  DbSubnet1Id:
+    Description: DB subnet 1 ID in Availability Zone 1
+    Value: !Ref DbSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-DbSubnet1Id"
+  DbSubnet1Cidr:
+    Description: DB subnet 1 CIDR in Availability Zone 1
+    Value: !Ref DbSubnet1Cidr
+    Export:
+      Name: !Sub "${AWS::StackName}-DbSubnet1Cidr"
+  DbSubnet2Id:
+    Description: DB subnet 2 ID in Availability Zone 2
+    Value: !Ref DbSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-DbSubnet2Id"
+  DbSubnet2Cidr:
+    Description: DB subnet 2 CIDR in Availability Zone 2
+    Value: !Ref DbSubnet2Cidr
+    Export:
+      Name: !Sub "${AWS::StackName}-DbSubnet2Cidr"
+  Nat1Eip:
+    Description: NAT 1 IP address
+    Value: !Ref Nat1Eip
+    Export:
+      Name: !Sub "${AWS::StackName}-Nat1Eip"
+  Nat2Eip:
+    Description: NAT 2 IP address
+    Value: !Ref Nat2Eip
+    Export:
+      Name: !Sub "${AWS::StackName}-Nat2Eip"

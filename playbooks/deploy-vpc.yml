@@ -1,0 +1,14 @@
+---
+- name: Create or Update VPC
+  cloudformation:
+    profile: "{{ profile }}"
+    aws_region: "{{ region }}"
+    disable_rollback: false
+    stack_name: "{{ cf_stack_names.vpc_stack_name }}"
+    state: present
+    create_changeset: false
+    tags:
+      Name: "{{ cf_stack_names.vpc_stack_name }}"
+    template: "cf-templates/vpc.yml"
+    template_parameters: "{{ vpc_parameters['cf_params'] }}"
+  register: vpc_stack_results
