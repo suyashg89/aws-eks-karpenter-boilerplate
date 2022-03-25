@@ -1,0 +1,152 @@
+---
+# Create Deployment Package
+- name: Default resource names when we don't have a function_suffix
+  set_fact:
+    function_path: "{{ function }}"
+    function_name: "{{ function }}"
+    function_name_nodash: "{{ function }}"
+
+- name: Delete tmp dir
+  file:
+    path: ./tmp
+    state: absent
+    force: yes
+
+- name: Create tmp dir
+  file:
+    path: "./tmp/{{ function_path }}"
+    state: directory
+
+- name: Create build dir
+  file:
+    path: "./build"
+    state: directory
+
+- name: Copy code in tmp
+  copy:
+    src: "{{ item }}"
+    dest: "./tmp/{{ function_path }}/"
+  with_fileglob:
+    - "./functions/{{ function_path }}/*.py"
+    - "./functions/{{ function_path }}/requirements.txt"
+
+- name: Get absolute path
+  changed_when: false
+  command: pwd
+  args:
+    chdir: ./tmp
+  register: abs_tmp_path
+
+- name: Check that requirements.txt exists
+  changed_when: false
+  stat:
+    path: '{{ abs_tmp_path.stdout }}/{{ function_path }}/requirements.txt'
+  register: requirements_result
+
+- name: Install all library dependencies
+  when: requirements_result.stat.exists
+  shell: "pip install -t {{ abs_tmp_path.stdout }}/{{ function_path }}/ -r {{ abs_tmp_path.stdout }}/{{ function_path }}/requirements.txt"
+
+- name: Find unnecessary files
+  find:
+    paths: "{{ abs_tmp_path.stdout }}/{{ function_path }}"
+    patterns: "*.py[co]"
+  register: find_result
+
+- name: Delete unnecessary files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ find_result.files }}"
+
+- name: Remove any old zip
+  file:
+    path: ./build/{{ function_path }}.zip
+    state: absent
+
+- name: Zip package
+  archive:
+    path: "./tmp/{{ function_path }}/*"
+    dest: "./build/{{function_path}}.zip"
+    format: zip
+
+# Copy to S3
+- name: Copy package to s3
+  aws_s3:
+    profile: "{{ profile }}"
+    region: "{{ region }}"
+    bucket: "{{ eks_infra_bucket }}"
+    object: "/code/lambda/{{ function_path }}.zip"
+    src: build/{{ function_path }}.zip
+    mode: put
+
+- name: Get s3 version ID of latest
+  command: >
+    aws s3api head-object
+      --bucket {{ eks_infra_bucket }}
+      --key code/lambda/{{ function_path }}.zip
+  environment:
+    AWS_PROFILE: "{{ profile }}"
+  register: s3_object_version_result
+
+# IAM role creation and load/attach policies
+- name: Create IAM Managed Policy
+  iam_managed_policy:
+    profile: "{{ profile }}"
+    policy_name: "{{ function_name }}Policy"
+    policy: "{{ lookup('file', './functions/{{ function_path }}/{{ function_path }}_policy.json') }}"
+    state: present
+
+- name: Create IAM role for Lambda function
+  iam_role:
+    profile: "{{ profile }}"
+    region: "{{ region }}"
+    name: '{{ function_name }}Lambda'
+    state: present
+    create_instance_profile: false
+    assume_role_policy_document:
+      Version: '2012-10-17'
+      Statement:
+      - Action: sts:AssumeRole
+        Effect: Allow
+        Principal:
+          Service: lambda.amazonaws.com
+    managed_policy:
+      - "arn:aws:iam::{{ aws_account_number }}:policy/{{ function_name }}Policy"
+
+# Pause for 1 minute to build make IAM role available for use by Lambda function.
+- name: Pause for 1 min to make newly created IAM role available for use
+  pause:
+    minutes: 1
+
+# Lambda creation with ansible
+- name: Create Lambda function
+  lambda:
+    profile: "{{ profile }}"
+    aws_region: "{{ region }}"
+    name: "{{ function_name_nodash }}"
+    description: "{{ lambda_parameters[function_name]['description'] }}"
+    state: present
+    runtime: "{{ lambda_parameters[function_name]['runtime'] | default('python3.6') }}"
+    handler: "{{ lambda_parameters[function_name]['handler'] }}"
+    role: "arn:aws:iam::{{ aws_account_number }}:role/{{ function_name }}Lambda"
+    s3_bucket: "{{ eks_infra_bucket }}"
+    s3_key: "code/lambda/{{ function_path }}.zip"
+    s3_object_version: '{{ (s3_object_version_result.stdout|from_json)["VersionId"] }}'
+    environment_variables: "{{ lambda_parameters[function_name]['lambda_params'] }}"
+    timeout: "{{ lambda_parameters[function_name]['lambda_timeout']}}"
+    vpc_security_group_ids: "{{ vpc_sg_id | default(omit) }}"
+    vpc_subnet_ids: "{{ vpc_subnet_ids | default(omit) }}"
+  register: function_output
+
+- name: Delete tmp dir
+  file:
+    path: ./tmp
+    state: absent
+    force: yes
+
+- name: Delete build dir
+  file:
+    path: ./build
+    state: absent
+    force: yes
