@@ -1,0 +1,69 @@
+---
+- name: Create AWS Infrastructure
+  hosts: local
+  vars_files:
+    - "vars/{{ env }}.yml"
+  tasks:
+    - include: playbooks/deploy-s3-bucket.yml
+      tags:
+        - s3
+        - never
+
+    - include: playbooks/deploy-vpc.yml
+      tags:
+        - vpc
+        - never
+    
+    - include_tasks: playbooks/deploy-eks-lambda-functions.yml
+      loop: 
+        - configureEksControlPlane
+        - configureEksOidcProvider
+        - getEksOidcUrl
+      loop_control:
+        loop_var: function
+      args:
+        apply:
+          tags:
+            - eks_lambda_fn
+      tags:
+        - eks_lambda_fn
+
+    - include: playbooks/deploy-eks-iam-roles.yml
+      tags:
+        - eks_iam_roles
+        - never
+
+    - include: playbooks/deploy-eks-control-plane.yml
+      tags:
+        - eks_control_plane
+        - never
+
+    - include: playbooks/deploy-eks-addons.yml
+      tags:
+        - eks_addons
+        - never
+
+    - include: playbooks/deploy-eks-karpenter-prereqs.yml
+      tags:
+        - never
+        - eks_karpenter_prereqs
+
+    - include: playbooks/configure-eks-aws-auth.yml
+      tags:
+        - eks_aws_auth
+        - never
+
+    - include: playbooks/deploy-eks-starters-worker-nodegroup.yml
+      tags:
+        - eks_starters_nodegroup
+        - never
+
+    - include: playbooks/install-eks-karpenter.yml
+      tags:
+        - never
+        - install_eks_karpenter
+    
+    - include: playbooks/deploy-example-inflate-pods.yml
+      tags:
+        - never
+        - example_inflate_pods
