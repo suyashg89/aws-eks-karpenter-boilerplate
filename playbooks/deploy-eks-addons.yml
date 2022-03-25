@@ -1,0 +1,51 @@
+---
+- name: Gather CF stack info for {{ cf_stack_names.vpc_stack_name }}
+  cloudformation_info:
+    region: "{{ region }}"
+    stack_name: "{{ cf_stack_names.vpc_stack_name }}"
+    profile: "{{ profile }}"
+  register: vpc_stack
+
+- name: Gather CF stack info for {{ cf_stack_names.eks_control_plane_stack_name }}
+  cloudformation_info:
+    region: "{{ region }}"
+    stack_name: "{{ cf_stack_names.eks_control_plane_stack_name }}"
+    profile: "{{ profile }}"
+  register: eks_control_plane_stack
+
+- name: Templating vpc-cni-trust.j2 to vpc-cni-trust.json policy document
+  template:
+    src: templates/vpc-cni-trust.j2
+    dest: templates/vpc-cni-trust.json
+
+- name: Creating AWS VPC CNI IAM role for EKS cluster CNI networking
+  iam_role:
+    profile: "{{ profile }}"
+    region: "{{ region }}"
+    name: "{{ env }}-eks-addons-vpc-cni"
+    description: "AWS VPC CNI role for {{ eks_cluster_name }} CNI networking"
+    state: present
+    create_instance_profile: false
+    assume_role_policy_document: "{{ lookup('file', './templates/vpc-cni-trust.json') }}"
+    managed_policy:
+      - "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  register: vpc_cni_iam_role
+
+- name: Create, Update or Delete EKS Add-ons CF stack
+  cloudformation:
+    profile: "{{ profile }}"
+    aws_region: "{{ region }}"
+    disable_rollback: false
+    stack_name: "{{ cf_stack_names.eks_addons_stack_name }}"
+    state: "present"
+    create_changeset: false
+    tags:
+      Name: "{{ cf_stack_names.eks_addons_stack_name }}"
+    template: "cf-templates/eks-addons.yml"
+    template_parameters: "{{ eks_addons_parameters['cf_params'] }}"
+
+- name: Delete templated files
+  file:
+    path: templates/vpc-cni-trust.json
+    state: absent
+    force: yes

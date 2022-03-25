@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CF stack to create Amazon EKS Add-ons
+Parameters:
+  Environment:
+    Description: VPC Name for which the stack is going to be created/updated
+    Type: String
+  VpcCniAddonVersion:
+    Description: VPC CNI Amazon EKS Add-on version
+    Type: String
+  CoreDnsAddonVersion:
+    Description: Core DNS Amazon EKS Add-on version
+    Type: String
+  KubeProxyAddonVersion:
+    Description: kube-proxy Amazon EKS Add-on version
+    Type: String
+  ResolveConflicts:
+    Description: How to resolve parameter value conflicts when migrating an existing add-on to an Amazon EKS add-on
+    Type: String
+  EksClusterName:
+    Description: Name of Amazon EKS cluster
+    Type: String
+Resources:
+  VpcCniAddon:
+    Type: AWS::EKS::Addon
+    Properties: 
+      AddonName: vpc-cni
+      AddonVersion: !Ref VpcCniAddonVersion
+      ClusterName: !Sub "${EksClusterName}"
+      ResolveConflicts: !Ref ResolveConflicts
+      ServiceAccountRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/${Environment}-eks-addons-vpc-cni"
+  CoreDnsAddon:
+    Type: AWS::EKS::Addon
+    Properties: 
+      AddonName: coredns
+      AddonVersion: !Ref CoreDnsAddonVersion
+      ClusterName: !Sub "${EksClusterName}"
+      ResolveConflicts: !Ref ResolveConflicts
+  KubeProxyAddon:
+    Type: AWS::EKS::Addon
+    Properties: 
+      AddonName: kube-proxy
+      AddonVersion: !Ref KubeProxyAddonVersion
+      ClusterName: !Sub "${EksClusterName}"
+      ResolveConflicts: !Ref ResolveConflicts
+Outputs:
+  VpcCniAddonArn:
+    Description: Amazon EKS VPC CNI Add-on ARN
+    Value: !GetAtt VpcCniAddon.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-VpcCniAddonArn'
+  CoreDnsAddonArn:
+    Description: Amazon EKS CoreDNS Add-on ARN
+    Value: !GetAtt CoreDnsAddon.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CoreDnsAddonArn'
+  KubeProxyAddonArn:
+    Description: Amazon EKS kube-proxy Add-on ARN
+    Value: !GetAtt KubeProxyAddon.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KubeProxyAddonArn'

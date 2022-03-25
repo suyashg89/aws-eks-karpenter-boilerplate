@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::{{ aws_account_number }}:oidc-provider/{{ eks_control_plane_stack['cloudformation'][cf_stack_names.eks_control_plane_stack_name]['stack_outputs']['OidcIssuerUrl'] }}"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "{{ eks_control_plane_stack['cloudformation'][cf_stack_names.eks_control_plane_stack_name]['stack_outputs']['OidcIssuerUrl'] }}:sub": "system:serviceaccount:kube-system:aws-node"
+        }
+      }
+    }
+  ]
+}
