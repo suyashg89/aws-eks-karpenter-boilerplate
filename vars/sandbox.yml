@@ -1,8 +1,11 @@
 ---
-aws_account_number: "<ADD_YOUR_AWS_ACCOUNT_NUMBER>"
-region: "<ADD_YOUR_PREFERRED_AWS_REGION>"
-eks_cluster_name: "{{ env }}-cluster"
-eks_infra_bucket: "eks-infrastructure"
+aws_account_number: "<YOUR_AWS_ACCOUNT_NUMBER>"
+region: "<YOUR_PREFERRED_AWS_REGION>" # example - eu-west-1
+eks_infra_bucket: "<YOUR_CHOSEN_S3_BUCKET_NAME>" # example - eks-infrastructure
+eks_cluster_name: "<YOUR_CHOSEN_EKS_CLUSTER_NAME>" # example - {{ env }}-cluster will make the name as sandbox-cluster if 'env' is set to sandbox
+ec2_keypair_name: "<EC2_SSH_KEY_PAIR_FOR_WORKER_NODES>" # example - sandbox-admin
+eks_node_ami_id: "<EKS_OPTIMIZED_WORKER_NODE_AMI_ID>" # example - ami-06efe6b9d402e8674
+
 cf_stack_names:
   s3_bucket_stack_name: "{{ env }}-s3"
   vpc_stack_name: "{{ env }}-vpc"
@@ -36,15 +39,14 @@ lambda_parameters:
       LOG_LEVEL: "INFO"
   
 bucket_parameters:
-  eks-infrastructure:
-    cf_params:
-      BucketName: eks-infrastructure
-      EnableVersioning: Enabled
-      EnableEncryption: "true"
-      BlockPublicAcls: false
-      BlockPublicPolicy: false
-      IgnorePublicAcls: false
-      RestrictPublicBuckets: false
+  cf_params:
+    BucketName: "{{ eks_infra_bucket }}"
+    EnableVersioning: Enabled
+    EnableEncryption: "true"
+    BlockPublicAcls: false
+    BlockPublicPolicy: false
+    IgnorePublicAcls: false
+    RestrictPublicBuckets: false
 
 vpc_parameters:
   cf_params:
@@ -92,12 +94,12 @@ eks_starters_worker_nodegroup_parameters:
     IamStackName: "{{ cf_stack_names.eks_iam_stack_name }}"
     EksControlPlaneStackName: "{{ cf_stack_names.eks_control_plane_stack_name }}"
     EksClusterName: "{{ eks_cluster_name }}"
-    NodeImageId: "<ADD_EKS_OPTIMIZED_WORKERNODE_AMI_ID>"
+    NodeImageId: "{{ eks_node_ami_id }}"
     NodeAutoScalingGroupMinSize: "1"
     NodeAutoScalingGroupMaxSize: "2"
     NodeInstanceType: "m5.large"
     NodeVolumeSize: "50"
-    KeyName: "{{ env }}-admin"
+    KeyName: "{{ ec2_keypair_name }}"
     HttpPutResponseHopLimit: "1"
     DisableIMDSv1: "true"
     RollingUpdateSleepTime: 300
@@ -107,13 +109,13 @@ eks_karpenter_parameters:
     Environment: "{{ env }}"
     EksControlPlaneStackName: "{{ cf_stack_names.eks_control_plane_stack_name }}"
     EksClusterName: "{{ eks_cluster_name }}"
-    LaunchTemplateName: "{{ env }}-eks-worker-node-template"
-    NodeImageId: "<ADD_EKS_OPTIMIZED_WORKERNODE_AMI_ID>"
+    LaunchTemplateName: "{{ env }}-eks-karpenter-worker-node-template"
+    NodeImageId: "{{ eks_node_ami_id }}"
     NodeVolumeSize: "50"
-    KeyName: "<ADD_EC2_SSH_KEYPAIR_NAME>"
+    KeyName: "{{ ec2_keypair_name }}"
     HttpPutResponseHopLimit: "1"
     DisableIMDSv1: "true"
-  karpenter_helm_charts_version: v0.6.4
+  karpenter_helm_charts_version: v0.6.5
   provisioners:
     - name: "general-purpose"
       ec2_instance_type: "'m5.xlarge', 'm5.2xlarge', 'm5.4xlarge'"

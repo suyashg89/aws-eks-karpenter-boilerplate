@@ -1,14 +1,14 @@
 ---
-- name: "Create, Update or Delete S3 Bucket {{ bucket_name }}."
+- name: "Create, Update or Delete S3 Bucket {{ eks_infra_bucket }}."
   cloudformation:
     profile: "{{ profile }}"
     aws_region: "{{ region }}"
     disable_rollback: false
-    stack_name: "{{ cf_stack_names.s3_bucket_stack_name }}-{{ bucket_name }}"
+    stack_name: "{{ cf_stack_names.s3_bucket_stack_name }}-{{ eks_infra_bucket }}"
     state: present
     create_changeset: false
     tags:
-      Name: "{{ cf_stack_names.s3_bucket_stack_name }}-{{ bucket_name }}"
+      Name: "{{ cf_stack_names.s3_bucket_stack_name }}-{{ eks_infra_bucket }}"
     template: "cf-templates/s3.yml"
-    template_parameters: "{{ bucket_parameters[bucket_name]['cf_params'] }}"
+    template_parameters: "{{ bucket_parameters['cf_params'] }}"
   register: s3_bucket_stack_results

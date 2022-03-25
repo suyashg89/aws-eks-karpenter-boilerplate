@@ -1,5 +1,5 @@
 ---
-- name: Create AWS Infrastructure
+- name: Deploy AWS Infrastructure for Amazon EKS with Karpenter Autoscaler
   hosts: local
   vars_files:
     - "vars/{{ env }}.yml"
@@ -8,11 +8,7 @@
       tags:
         - s3
         - never
-
-    - include: playbooks/deploy-vpc.yml
-      tags:
-        - vpc
-        - never
+        - run_all
     
     - include_tasks: playbooks/deploy-eks-lambda-functions.yml
       loop: 
@@ -25,45 +21,61 @@
         apply:
           tags:
             - eks_lambda_fn
+            - run_all
       tags:
         - eks_lambda_fn
+        - never
+        - run_all
 
+    - include: playbooks/deploy-vpc.yml
+      tags:
+        - vpc
+        - never
+        - run_all
+    
     - include: playbooks/deploy-eks-iam-roles.yml
       tags:
         - eks_iam_roles
         - never
+        - run_all
 
     - include: playbooks/deploy-eks-control-plane.yml
       tags:
         - eks_control_plane
         - never
+        - run_all
+    
+    - include: playbooks/deploy-eks-karpenter-prereqs.yml
+      tags:
+        - never
+        - eks_karpenter_prereqs
+        - run_all
+    
+    - include: playbooks/configure-eks-aws-auth.yml
+      tags:
+        - eks_aws_auth
+        - never
+        - run_all
+    
+    - include: playbooks/deploy-eks-starters-worker-nodegroup.yml
+      tags:
+        - eks_starters_nodegroup
+        - never
+        - run_all
 
     - include: playbooks/deploy-eks-addons.yml
       tags:
         - eks_addons
         - never
-
-    - include: playbooks/deploy-eks-karpenter-prereqs.yml
-      tags:
-        - never
-        - eks_karpenter_prereqs
-
-    - include: playbooks/configure-eks-aws-auth.yml
-      tags:
-        - eks_aws_auth
-        - never
-
-    - include: playbooks/deploy-eks-starters-worker-nodegroup.yml
-      tags:
-        - eks_starters_nodegroup
-        - never
+        - run_all
 
     - include: playbooks/install-eks-karpenter.yml
       tags:
-        - never
         - install_eks_karpenter
+        - never
+        - run_all
     
     - include: playbooks/deploy-example-inflate-pods.yml
       tags:
-        - never
         - example_inflate_pods
+        - never
