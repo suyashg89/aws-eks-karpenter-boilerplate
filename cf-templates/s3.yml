@@ -1,0 +1,90 @@
+---
+Description: S3 Bucket Stack
+Parameters:
+  BucketName:
+    Type: String
+    Description: Name of the Bucket, update requires replacement
+    Default: NONAME
+    MinLength: 3
+    MaxLength: 63
+  SSEAlgorithm:
+    Type: String
+    AllowedValues:
+      - "aws:kms"
+      - "AES256"
+    Description: The server side encryption algorithm to use
+    Default: "AES256"
+  AccessControl:
+    Type: String
+    Description: Bucket access control policy
+    Default: Private
+  BlockPublicAcls:
+    Type: String
+    Default: false
+  BlockPublicPolicy:
+    Type: String
+    Default: false
+  IgnorePublicAcls:
+    Type: String
+    Default: false
+  RestrictPublicBuckets:
+    Type: String
+    Default: false
+  EnableVersioning:
+    Type: String
+    Default: Suspended
+    AllowedValues:
+      - Suspended
+      - Enabled
+  EnableEncryption:
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Default: false
+    Description: Enable encryption on S3 bucket
+  KMSMasterKeyID:
+    Type: String
+    Description: AWS KMS master key ID used for the SSE-KMS encryption, can only be set when SSEAlgorithm is aws:kms
+    Default: ""
+Outputs:
+  BucketName:
+    Description: Bucket Name
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub "${AWS::StackName}-BucketName"
+  BucketArn:
+    Description: Bucket ARN
+    Value: !GetAtt S3Bucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-BucketArn"
+Conditions:
+  isBucketNameSet: !Not [!Equals [!Ref BucketName, "NONAME"]]
+  isVersioningEnabled: !Equals [!Ref EnableVersioning, "Enabled"]
+  isEncryptionEnabled: !Equals [!Ref EnableEncryption, true]
+  isSseAwsKms: !Equals [!Ref SSEAlgorithm, "aws:kms"]
+  isKmsKeySet: !Not [!Equals [!Ref KMSMasterKeyID, ""]]
+  isSseAwsKmsAndKmsKeySet: !And
+    - !Condition isSseAwsKms
+    - !Condition isKmsKeySet
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: !Ref AccessControl
+      PublicAccessBlockConfiguration: 
+        BlockPublicAcls: !Ref BlockPublicAcls
+        BlockPublicPolicy: !Ref BlockPublicPolicy
+        IgnorePublicAcls: !Ref IgnorePublicAcls
+        RestrictPublicBuckets: !Ref RestrictPublicBuckets
+      BucketEncryption:
+        Fn::If:
+        - isEncryptionEnabled
+        - ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                KMSMasterKeyID: !If [isSseAwsKmsAndKmsKeySet, !Ref KMSMasterKeyID, !Ref "AWS::NoValue"]  # Uses default aws/s3 KMS master key when not specified
+                SSEAlgorithm: !Ref SSEAlgorithm
+        - !Ref "AWS::NoValue"
+      BucketName: !If [isBucketNameSet, !Ref BucketName, !Ref "AWS::NoValue"]
+      VersioningConfiguration:
+        Status: !Ref EnableVersioning
