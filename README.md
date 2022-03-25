@@ -1,6 +1,6 @@
 # Karpenter Autoscaler for Amazon EKS - Boilerplate IaC
 
-Karpenter is an open-source, flexible, high-performance Kubernetes cluster autoscaler built with AWS. It helps improve your application availability and cluster efficiency by rapidly launching right-sized compute resources in response to changing application load. Karpenter also provides just-in-time compute resources to meet your application’s needs and will soon automatically optimize a cluster’s compute resource footprint to reduce costs and improve performance. When Karpenter is installed in your cluster, Karpenter observes the aggregate resource requests of unscheduled pods and makes decisions to launch new nodes and terminate them to reduce scheduling latencies and infrastructure costs. Karpenter does this by observing events within the Kubernetes cluster and then sending commands to the underlying cloud provider’s compute service, such as Amazon EC2. For more information on Karpenter, please refer [Karpenter official documentation](https://karpenter.sh/docs/).
+Karpenter is an open-source, flexible, high-performance Kubernetes cluster autoscaler built with AWS. It helps improve your application availability and cluster efficiency by rapidly launching right-sized compute resources in response to changing application load. Karpenter also provides just-in-time compute resources to meet your application’s needs and will soon automatically optimize a cluster’s compute resource footprint to reduce costs and improve performance. When Karpenter is installed in your cluster, Karpenter observes the aggregate resource requests of unscheduled pods and makes decisions to launch new nodes and terminate them to reduce scheduling latencies and infrastructure costs. Karpenter does this by observing events within the Kubernetes cluster and then sending commands to the underlying cloud provider’s compute service, such as Amazon EC2.
 
 The IaC in this repository is a boilerplate to orchestrate the deployment of **Karpenter** along with following resources in your AWS account using Ansible playbooks and AWS Cloudformation stacks:-
 
@@ -161,23 +161,23 @@ If you want to review the deployment of each infrastructure component, please fo
 
 - To deploy Karpenter pre-requisite resources, please run the below command:-
 
-`ansible-playbook -e "profile=PROFILE env=ENV" local.yml -vv --tags eks_karpenter_prereqs`
+  `ansible-playbook -e "profile=PROFILE env=ENV" local.yml -vv --tags eks_karpenter_prereqs`
 
 - To deploy `aws-auth` k8s configmap in the EKS cluster, please run the below command:-
 
-`ansible-playbook -e "profile=PROFILE env=ENV" local.yml -vv --tags eks_aws_auth`
+  `ansible-playbook -e "profile=PROFILE env=ENV" local.yml -vv --tags eks_aws_auth`
 
 - To deploy Amazon EKS managed add-ons in the EKS cluster, please run the below command:-
 
-`ansible-playbook -e "profile=PROFILE env=ENV" local.yml -vv --tags eks_addons`
+  `ansible-playbook -e "profile=PROFILE env=ENV" local.yml -vv --tags eks_addons`
 
 - To deploy starters EKS worker nodegroup, please run the below command:-
 
-`ansible-playbook -e "profile=PROFILE env=ENV" local.yml -vv --tags eks_starters_nodegroup`
+  `ansible-playbook -e "profile=PROFILE env=ENV" local.yml -vv --tags eks_starters_nodegroup`
 
 - To install Karpenter helm-charts and its provisioners, please run the below command:-
 
-`ansible-playbook -e "profile=PROFILE env=ENV" local.yml -vv --tags install_eks_karpenter`
+  `ansible-playbook -e "profile=PROFILE env=ENV" local.yml -vv --tags install_eks_karpenter`
 
 ## Test Karpenter Worker Node Provisioining for Amazon EKS
 
