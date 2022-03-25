@@ -1,0 +1,221 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Pre-requisite resources used by Karpenter autoscaler
+Parameters:
+  EksControlPlaneStackName:
+    Type: String
+    Default: ""
+    Description: "Amazon EKS cluster Control plane stack name."
+  EksClusterName:
+    Type: String
+    Description: "Amazon EKS cluster name."
+  Environment:
+    Type: String
+    Description: "VPC name where Amazon EKS cluster is created."
+  LaunchTemplateName:
+    Type: String
+    Description: "Name to be given to the EKS worker EC2 node launch template."
+  OidcIssuerUrl:
+    Type: String
+    Description: "OIDC Issuer URL of Amazon EKS cluster."
+  BootstrapArguments:
+    Type: String
+    Default: ""
+    Description: "Arguments to pass to the bootstrap script. See files/bootstrap.sh in https://github.com/awslabs/amazon-eks-ami"
+  NodeImageId:
+    Type: String
+    Default: ""
+    Description: "(Optional) Specify your own custom image ID. This value overrides any AWS Systems Manager Parameter Store value specified above."
+  NodeImageIdSSMParam:
+    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+    Default: /aws/service/eks/optimized-ami/1.21/amazon-linux-2/recommended/image_id
+    Description: "AWS Systems Manager Parameter Store parameter of the AMI ID for the worker node instances. Change this value to match the version of Kubernetes you are using."
+  DisableIMDSv1:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "false"
+      - "true"
+  KeyName:
+    Type: "AWS::EC2::KeyPair::KeyName"
+    Description: "The EC2 Key Pair to allow SSH access to the instances."
+  NodeVolumeSize:
+    Type: Number
+    Default: 50
+    Description: "Node volume size."
+  HttpPutResponseHopLimit:
+    Type: Number
+    Default: 2
+    Description: "The desired HTTP PUT response hop limit for instance metadata requests."
+Conditions:
+  HasNodeImageId: !Not
+    - "Fn::Equals":
+      - !Ref NodeImageId
+      - ""
+  IMDSv1Disabled:
+    "Fn::Equals":
+      - !Ref DisableIMDSv1
+      - "true"
+Resources:
+  KarpenterNodeRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Description: !Sub "AWS Karpenter Node IAM role for Amazon EKS ${EksClusterName}"
+      RoleName: !Sub "${EksClusterName}-KarpenterNodeRole"
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                !Sub "ec2.${AWS::URLSuffix}"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonEKSWorkerNodePolicy'
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonEKS_CNI_Policy'
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly'
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonElasticFileSystemReadOnlyAccess'
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore'
+  KarpenterNodeInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      InstanceProfileName: !Sub "${EksClusterName}-KarpenterNodeInstanceProfile"
+      Path: "/"
+      Roles:
+        - Ref: "KarpenterNodeRole"
+  KarpenterControllerPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: !Sub "AWS Karpenter Controller IAM policy for Amazon EKS ${EksClusterName}"
+      ManagedPolicyName: !Sub "${EksClusterName}-KarpenterControllerPolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Resource: "*"
+            Action:
+              - ec2:CreateLaunchTemplate
+              - ec2:CreateFleet
+              - ec2:RunInstances
+              - ec2:CreateTags
+              - iam:PassRole
+              - ec2:TerminateInstances
+              - ec2:DescribeLaunchTemplates
+              - ec2:DescribeInstances
+              - ec2:DescribeSecurityGroups
+              - ec2:DescribeSubnets
+              - ec2:DescribeInstanceTypes
+              - ec2:DescribeInstanceTypeOfferings
+              - ec2:DescribeAvailabilityZones
+              - ssm:GetParameter
+  KarpenterControllerRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Description: !Sub "AWS Karpenter Controller IAM role for Amazon EKS ${EksClusterName}"
+      RoleName: !Sub "${EksClusterName}-KarpenterControllerRole"
+      Path: /
+      AssumeRolePolicyDocument:
+        !Sub |
+            {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Federated": "arn:aws:iam::${AWS::AccountId}:oidc-provider/${OidcIssuerUrl}"
+                  },
+                  "Action": "sts:AssumeRoleWithWebIdentity",
+                  "Condition": {
+                    "StringEquals": {
+                      "${OidcIssuerUrl}:sub": "system:serviceaccount:karpenter:karpenter"
+                    }
+                  }
+                }
+              ]
+            }
+      ManagedPolicyArns:
+        - !Ref KarpenterControllerPolicy
+  NodeLaunchTemplate:
+    Type: "AWS::EC2::LaunchTemplate"
+    Properties:
+      LaunchTemplateName: !Ref LaunchTemplateName
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              DeleteOnTermination: true
+              VolumeSize: !Ref NodeVolumeSize
+              VolumeType: gp2
+        IamInstanceProfile:
+          Arn: !GetAtt KarpenterNodeInstanceProfile.Arn
+        ImageId: !If
+          - HasNodeImageId
+          - !Ref NodeImageId
+          - !Ref NodeImageIdSSMParam
+        KeyName: !Ref KeyName
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub "${EksControlPlaneStackName}-NodeSecurityGroup"
+        UserData: !Base64
+          "Fn::Sub": |
+            #!/bin/bash
+            set -o xtrace
+            # Inject imageGCHighThresholdPercent value unless it has already been set.
+            if ! grep -q imageGCHighThresholdPercent /etc/kubernetes/kubelet/kubelet-config.json;
+            then
+                sed -i '/"apiVersion*/a \ \ "imageGCHighThresholdPercent": 85,' /etc/kubernetes/kubelet/kubelet-config.json
+            fi
+
+            # Inject imageGCLowThresholdPercent value unless it has already been set.
+            if ! grep -q imageGCLowThresholdPercent /etc/kubernetes/kubelet/kubelet-config.json;
+            then
+                sed -i '/"imageGCHigh*/a \ \ "imageGCLowThresholdPercent": 80,' /etc/kubernetes/kubelet/kubelet-config.json
+            fi
+            /etc/eks/bootstrap.sh ${EksClusterName} ${BootstrapArguments}
+            yum install -y https://s3.${AWS::Region}.amazonaws.com/amazon-ssm-${AWS::Region}/latest/linux_amd64/amazon-ssm-agent.rpm
+            systemctl enable amazon-ssm-agent
+            systemctl start amazon-ssm-agent
+            echo "ssm-user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ssm-agent-users
+        MetadataOptions:
+          HttpPutResponseHopLimit : !Ref HttpPutResponseHopLimit
+          HttpEndpoint: enabled
+          HttpTokens: !If
+            - IMDSv1Disabled
+            - required
+            - optional
+        TagSpecifications:
+          - ResourceType: volume
+            Tags:
+              - Key: "Name"
+                Value: !Sub ${Environment}-eks-karpenter-worker-node-volume
+Outputs:
+  KarpenterNodeRoleArn:
+    Description: Karpenter Node IAM Role ARN
+    Value: !GetAtt KarpenterNodeRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-KarpenterNodeRoleArn"
+  KarpenterControllerRoleArn:
+    Description: Karpenter Controller IAM Role ARN
+    Value: !GetAtt KarpenterControllerRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-KarpenterControllerRoleArn"
+  KarpenterNodeInstanceProfileName:
+    Description: Karpenter Node InstanceProfile Name
+    Value: !Ref KarpenterNodeInstanceProfile
+    Export:
+      Name: !Sub "${AWS::StackName}-KarpenterNodeInstanceProfileName"
+  KarpenterNodeInstanceProfileArn:
+    Description: Karpenter Node InstanceProfile ARN
+    Value: !GetAtt KarpenterNodeInstanceProfile.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-KarpenterNodeInstanceProfileArn"
+  KarpenterNodeLaunchTemplateId:
+    Description: Karpenter Node Launch Template ID
+    Value: !Ref NodeLaunchTemplate
+    Export:
+      Name: !Sub "${AWS::StackName}-KarpenterNodeLaunchTemplateId"
+  KarpenterNodeLaunchTemplateLatestVersionNumber:
+    Description: Karpenter Node Launch Template Latest Version Number
+    Value: !GetAtt NodeLaunchTemplate.LatestVersionNumber
+    Export:
+      Name: !Sub "${AWS::StackName}-KarpenterNodeLaunchTemplateLatestVersionNumber"

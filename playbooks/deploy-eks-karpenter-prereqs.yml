@@ -1,0 +1,21 @@
+---
+- name: Gather CF stack info for {{ cf_stack_names.eks_control_plane_stack_name }}
+  cloudformation_info:
+    region: "{{ region }}"
+    stack_name: "{{ cf_stack_names.eks_control_plane_stack_name }}"
+    profile: "{{ profile }}"
+  register: eks_control_plane_stack
+
+- name: "Create or Update pre-requisites services for Karpenter"
+  cloudformation:
+    profile: "{{ profile }}"
+    aws_region: "{{ region }}"
+    disable_rollback: false
+    stack_name: "{{ cf_stack_names.eks_karpenter_prereqs_stack_name }}"
+    state: "present"
+    create_changeset: false
+    tags:
+      Name: "{{ cf_stack_names.eks_karpenter_prereqs_stack_name }}"
+    template: "cf-templates/eks-karpenter-prereqs.yml"
+    template_parameters: "{{ eks_karpenter_parameters['cf_params'] | combine( { 'OidcIssuerUrl': eks_control_plane_stack['cloudformation'][cf_stack_names.eks_control_plane_stack_name]['stack_outputs']['OidcIssuerUrl'] } ) }}"
+  register: eks_karpenter_prereqs_stack_results

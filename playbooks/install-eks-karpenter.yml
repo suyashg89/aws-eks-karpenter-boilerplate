@@ -1,0 +1,48 @@
+---
+- name: Gather CF stack info for {{ cf_stack_names.eks_karpenter_prereqs_stack_name }}
+  cloudformation_info:
+    region: "{{ region }}"
+    stack_name: "{{ cf_stack_names.eks_karpenter_prereqs_stack_name }}"
+    profile: "{{ profile }}"
+  register: karpenter_prereqs_stack
+
+- name: Login EKS cluster
+  shell: "aws eks --region {{ region }} update-kubeconfig --name {{ eks_cluster_name }} --profile {{ profile }}"
+
+- name: Retrieve deployed helm charts version of Karpenter
+  shell: "helm list -n karpenter"
+  register: karpenter_helm_charts_existing_version
+
+- name: Output deployed helm charts version of Karpenter
+  debug:
+    var: karpenter_helm_charts_existing_version.stdout_lines
+
+- name: Adding & Updating Karpenter helm charts repository
+  shell: "helm repo add karpenter https://charts.karpenter.sh && helm repo update"
+
+- name: Installing Karpenter helm charts
+  shell: |
+          helm upgrade --install --namespace karpenter --create-namespace\
+            karpenter karpenter/karpenter \
+            --version {{ eks_karpenter_parameters.karpenter_helm_charts_version }} \
+            --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"={{ karpenter_prereqs_stack['cloudformation'][cf_stack_names.eks_karpenter_prereqs_stack_name]['stack_outputs']['KarpenterControllerRoleArn'] }} \
+            --set clusterName={{ eks_cluster_name }} \
+            --set clusterEndpoint=$(aws eks describe-cluster --name {{ eks_cluster_name }} --query cluster.endpoint --output json --region {{ region }} --profile {{ profile }}) \
+            --set aws.defaultInstanceProfile={{ karpenter_prereqs_stack['cloudformation'][cf_stack_names.eks_karpenter_prereqs_stack_name]['stack_outputs']['KarpenterNodeInstanceProfileName'] }} \
+            --wait
+
+- name: Templating karpenter-k8s-provisioners.j2 to karpenter-k8s-provisioners.yml manifest
+  template:
+    src: templates/karpenter-k8s-provisioners.j2
+    dest: templates/karpenter-k8s-provisioners.yml
+    
+- name: Create Provisioners k8s CRD for Karpenter
+  k8s:
+    state: present
+    src: templates/karpenter-k8s-provisioners.yml
+
+- name: Delete templated files
+  file:
+    path: templates/karpenter-k8s-provisioners.yml
+    state: absent
+    force: yes

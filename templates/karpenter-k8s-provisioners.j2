@@ -1,0 +1,30 @@
+{% for provisioner in eks_karpenter_parameters.provisioners %}
+apiVersion: karpenter.sh/v1alpha5
+kind: Provisioner
+metadata:
+  name: {{ provisioner.name }}
+spec:
+  requirements:
+    - key: "node.kubernetes.io/instance-type"
+      operator: In
+      values: [{{ provisioner.ec2_instance_type }}]
+    - key: "topology.kubernetes.io/zone"
+      operator: In
+      values: [{{ provisioner.zone }}]
+    - key: "kubernetes.io/arch"
+      operator: In
+      values: [{{ provisioner.arch }}]
+    - key: "karpenter.sh/capacity-type"
+      operator: In
+      values: [{{ provisioner.capacity_type }}]
+  labels:
+    team: {{ provisioner.labels.team }}
+  provider:
+    launchTemplate: {{ eks_karpenter_parameters.cf_params.LaunchTemplateName }}
+    subnetSelector:
+      kubernetes.io/cluster/{{ eks_cluster_name }}: '*'
+    tags:
+      Name: "{{ env }}-eks-karpenter-worker-node"
+  ttlSecondsAfterEmpty: {{ provisioner.ttlSecondsAfterEmpty }}
+---
+{% endfor %}
