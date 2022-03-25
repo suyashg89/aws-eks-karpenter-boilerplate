@@ -1,0 +1,14 @@
+---
+- name: "Create, Update or Delete Control plane stack"
+  cloudformation:
+    profile: "{{ profile }}"
+    aws_region: "{{ region }}"
+    disable_rollback: false
+    stack_name: "{{ cf_stack_names.eks_control_plane_stack_name }}"
+    state: "present"
+    create_changeset: false
+    tags:
+      Name: "{{ cf_stack_names.eks_control_plane_stack_name }}"
+    template: "cf-templates/eks-control-plane.yml"
+    template_parameters: "{{ eks_control_plane_parameters['cf_params'] }}"
+  register: control_plane_stack_results
