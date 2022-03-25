@@ -1,0 +1,18 @@
+---
+- name: "Create, Update or Delete EKS IAM Roles stack"
+  cloudformation:
+    profile: "{{ profile }}"
+    aws_region: "{{ region }}"
+    disable_rollback: false
+    stack_name: "{{ cf_stack_names.eks_iam_stack_name }}"
+    state: present
+    create_changeset: false
+    capabilities:
+      - CAPABILITY_IAM
+      - CAPABILITY_NAMED_IAM
+      - CAPABILITY_AUTO_EXPAND
+    tags:
+      Name: "{{ cf_stack_names.eks_iam_stack_name }}"
+    template: "cf-templates/eks-iam-roles.yml"
+    template_parameters: "{{ eks_iam_parameters['cf_params'] }}"
+  register: eks_iam_roles_stack_results

@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: IAM roles that are required for creating EKS cluster
+Parameters:
+  Environment:
+    Description: Environment name for which the stack is going to be created/updated
+    Type: String
+    Default: ""
+Resources:
+  ControlPlaneRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${Environment}-eks-ControlPlaneRole"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: eks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonEKSClusterPolicy"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonEKSServicePolicy"
+  NodeInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Ref NodeInstanceRole
+      Path: "/"
+      Roles:
+        - !Ref NodeInstanceRole
+  NodeInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Environment}-eks-NodeInstanceRole"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !Sub "ec2.${AWS::URLSuffix}"
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: cfn-signal
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:SignalResource
+                Resource: "*"
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonEKS_CNI_Policy"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonElasticFileSystemReadOnlyAccess"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+Outputs:
+  ControlPlaneRoleArn:
+    Description: ControlPlane Role ARN
+    Value: !GetAtt ControlPlaneRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ControlPlaneRoleArn"
+  NodeInstanceRoleArn:
+    Description: Node Instance Role ARN
+    Value: !GetAtt NodeInstanceRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-NodeInstanceRoleArn"
+  NodeInstanceProfileArn:
+    Description: NodeInstance profile ARN
+    Value: !GetAtt NodeInstanceProfile.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-NodeInstanceProfileArn"
