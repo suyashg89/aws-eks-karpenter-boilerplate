@@ -1,0 +1,8 @@
+---
+- name: Login EKS cluster
+  shell: "aws eks --region {{ region }} update-kubeconfig --name {{ eks_cluster_name }} --profile {{ profile }}"
+
+- name: Deploy example inflate pods
+  k8s:
+    state: present
+    src: examples/inflate.yml
