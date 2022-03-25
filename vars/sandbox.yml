@@ -1,0 +1,125 @@
+---
+aws_account_number: "<ADD_YOUR_AWS_ACCOUNT_NUMBER>"
+region: "<ADD_YOUR_PREFERRED_AWS_REGION>"
+eks_cluster_name: "{{ env }}-cluster"
+eks_infra_bucket: "eks-infrastructure"
+cf_stack_names:
+  s3_bucket_stack_name: "{{ env }}-s3"
+  vpc_stack_name: "{{ env }}-vpc"
+  eks_iam_stack_name: "{{ env }}-eks-iam"
+  eks_control_plane_stack_name: "{{ env }}-eks-control-plane"
+  eks_starters_nodegroup_stack_name: "{{ env }}-eks-starters-worker-nodegroup"
+  eks_addons_stack_name: "{{ env }}-eks-addons"
+  eks_karpenter_prereqs_stack_name: "{{ env }}-eks-karpenter-prereqs"
+
+lambda_parameters:
+  configureEksControlPlane:
+    description: "Config EKS cluster Control plane"
+    handler: "configure_eks_control_plane.lambda_handler"
+    lambda_timeout: 900
+    runtime: python3.7
+    lambda_params:
+      LOG_LEVEL: "INFO"
+  configureEksOidcProvider:
+    description: "Configure EKS OIDC provider"
+    handler: "configure_eks_oidc_provider.lambda_handler"
+    lambda_timeout: 60
+    runtime: python3.7
+    lambda_params:
+      LOG_LEVEL: "INFO"
+  getEksOidcUrl:
+    description: "Get EKS OIDC URL"
+    handler: "get_eks_oidc_url.lambda_handler"
+    lambda_timeout: 30
+    runtime: python3.7
+    lambda_params:
+      LOG_LEVEL: "INFO"
+  
+bucket_parameters:
+  eks-infrastructure:
+    cf_params:
+      BucketName: eks-infrastructure
+      EnableVersioning: Enabled
+      EnableEncryption: "true"
+      BlockPublicAcls: false
+      BlockPublicPolicy: false
+      IgnorePublicAcls: false
+      RestrictPublicBuckets: false
+
+vpc_parameters:
+  cf_params:
+    EksClusterName: "{{ eks_cluster_name }}"
+    Environment: "{{ env }}"
+    AvailabilityZones: "{{ region }}a,{{ region }}b"
+    VpcPrimaryCidr: "10.8.0.0/22"
+    PublicSubnet1Cidr: "10.8.0.0/26"
+    PublicSubnet2Cidr: "10.8.0.64/26"
+    WebSubnet1Cidr: "10.8.1.0/25"
+    WebSubnet2Cidr: "10.8.1.128/25"
+    AppSubnet1Cidr: "10.8.2.0/24"
+    AppSubnet2Cidr: "10.8.3.0/24"
+    DbSubnet1Cidr: "10.8.0.128/26"
+    DbSubnet2Cidr: "10.8.0.192/26"
+    VpcTenancy: "default"
+
+eks_iam_parameters:
+  cf_params:
+    Environment: "{{ env }}"
+
+eks_control_plane_parameters:
+  cf_params:
+    Environment: "{{ env }}"
+    EksClusterName: "{{ eks_cluster_name }}"
+    VpcStackName: "{{ cf_stack_names.vpc_stack_name }}"
+    IamStackName: "{{ cf_stack_names.eks_iam_stack_name }}"
+    KubernetesVersion: "1.21"
+    EndpointPublicAccess: "True"
+    ClusterLoggingTypes: "api, audit, authenticator, controllerManager, scheduler"
+
+eks_addons_parameters:
+  cf_params:
+    EksClusterName: "{{ eks_cluster_name }}"
+    Environment: "{{ env }}"
+    VpcCniAddonVersion: "v1.10.2-eksbuild.1"
+    CoreDnsAddonVersion: "v1.8.4-eksbuild.1"
+    KubeProxyAddonVersion: "v1.21.2-eksbuild.2"
+    ResolveConflicts: "OVERWRITE"
+
+eks_starters_worker_nodegroup_parameters:
+  cf_params:
+    Environment: "{{ env }}"
+    VpcStackName: "{{ cf_stack_names.vpc_stack_name }}"
+    IamStackName: "{{ cf_stack_names.eks_iam_stack_name }}"
+    EksControlPlaneStackName: "{{ cf_stack_names.eks_control_plane_stack_name }}"
+    EksClusterName: "{{ eks_cluster_name }}"
+    NodeImageId: "<ADD_EKS_OPTIMIZED_WORKERNODE_AMI_ID>"
+    NodeAutoScalingGroupMinSize: "1"
+    NodeAutoScalingGroupMaxSize: "2"
+    NodeInstanceType: "m5.large"
+    NodeVolumeSize: "50"
+    KeyName: "{{ env }}-admin"
+    HttpPutResponseHopLimit: "1"
+    DisableIMDSv1: "true"
+    RollingUpdateSleepTime: 300
+
+eks_karpenter_parameters:
+  cf_params:
+    Environment: "{{ env }}"
+    EksControlPlaneStackName: "{{ cf_stack_names.eks_control_plane_stack_name }}"
+    EksClusterName: "{{ eks_cluster_name }}"
+    LaunchTemplateName: "{{ env }}-eks-worker-node-template"
+    NodeImageId: "<ADD_EKS_OPTIMIZED_WORKERNODE_AMI_ID>"
+    NodeVolumeSize: "50"
+    KeyName: "<ADD_EC2_SSH_KEYPAIR_NAME>"
+    HttpPutResponseHopLimit: "1"
+    DisableIMDSv1: "true"
+  karpenter_helm_charts_version: v0.6.4
+  provisioners:
+    - name: "general-purpose"
+      ec2_instance_type: "'m5.xlarge', 'm5.2xlarge', 'm5.4xlarge'"
+      zone: "'{{ region }}a', '{{ region }}b'"
+      arch: "'amd64'"
+      capacity_type: "'on-demand'"
+      labels:
+        team: team-a
+      ttlSecondsAfterEmpty: 30
