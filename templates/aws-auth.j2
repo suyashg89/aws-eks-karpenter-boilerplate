@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-auth
+  namespace: kube-system
+data:
+  mapRoles: |
+    - rolearn: {{ eks_iam_stack['cloudformation'][cf_stack_names.eks_iam_stack_name]['stack_outputs']['NodeInstanceRoleArn'] }}
+      username: system:node:{{ '{{EC2PrivateDNSName}}' }}
+      groups:
+        - system:bootstrappers
+        - system:nodes
+    - rolearn: {{ eks_karpenter_prereqs_stack['cloudformation'][cf_stack_names.eks_karpenter_prereqs_stack_name]['stack_outputs']['KarpenterNodeRoleArn'] }}
+      username: system:node:{{ '{{EC2PrivateDNSName}}' }}
+      groups:
+        - system:bootstrappers
+        - system:nodes

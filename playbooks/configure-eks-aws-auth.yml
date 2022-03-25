@@ -1,0 +1,41 @@
+---
+- name: Gather CF stack info for {{ cf_stack_names.eks_iam_stack_name }}
+  cloudformation_info:
+    region: "{{ region }}"
+    stack_name: "{{ cf_stack_names.eks_iam_stack_name }}"
+    profile: "{{ profile }}"
+  register: eks_iam_stack
+
+- name: Gather CF stack info for {{ cf_stack_names.eks_karpenter_prereqs_stack_name }}
+  cloudformation_info:
+    region: "{{ region }}"
+    stack_name: "{{ cf_stack_names.eks_karpenter_prereqs_stack_name }}"
+    profile: "{{ profile }}"
+  register: eks_karpenter_prereqs_stack
+
+- name: Login EKS cluster
+  shell: "aws eks --region {{ region }} update-kubeconfig --name {{ eks_cluster_name }} --profile {{ profile }}"
+
+- name: Get the info of aws-auth ConfigMap
+  k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    namespace: kube-system
+    name: aws-auth
+  register: config_map
+
+- name: Template aws-auth config file
+  template:
+    src: templates/aws-auth.j2
+    dest: templates/aws-auth.yml
+
+- name: Create aws-auth config
+  k8s:
+    state: present
+    src: templates/aws-auth.yml
+
+- name: Delete templated files
+  file:
+    path: templates/aws-auth.yml
+    state: absent
+    force: yes
