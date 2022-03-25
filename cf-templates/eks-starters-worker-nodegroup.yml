@@ -1,0 +1,165 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Amazon EKS - Node Group
+Parameters:
+  Environment:
+    Type: String
+    Default: ""
+    Description: "VPC Name where worker-node will create."
+  VpcStackName:
+    Type: String
+    Default: ""
+    Description: "VPC stack name."
+  IamStackName:
+    Type: String
+    Default: ""
+    Description: "IAM stack name."
+  EksControlPlaneStackName:
+    Type: String
+    Default: ""
+    Description: "Control plane stack name."
+  EksClusterName:
+    Type: String
+    Description: The cluster name provided when the cluster was created. If it is incorrect, nodes will not be able to join the cluster.
+  BootstrapArguments:
+    Type: String
+    Default: ""
+    Description: "Arguments to pass to the bootstrap script. See files/bootstrap.sh in https://github.com/awslabs/amazon-eks-ami"
+  KeyName:
+    Type: "AWS::EC2::KeyPair::KeyName"
+    Description: "The EC2 Key Pair to allow SSH access to the instances."
+  RollingUpdateSleepTime:
+    Type: String
+    Default: ""
+    Description: "Sleep time once all the config set have been executed and before sending success signal, to allow task be reschedule."
+  NodeAutoScalingGroupMaxSize:
+    Type: Number
+    Default: 4
+    Description: "Maximum size of Node Group ASG."
+  NodeAutoScalingGroupMinSize:
+    Type: Number
+    Default: 1
+    Description: "Minimum size of Node Group ASG."
+  NodeImageId:
+    Type: String
+    Default: ""
+    Description: "(Optional) Specify your own custom image ID. This value overrides any AWS Systems Manager Parameter Store value specified above."
+  NodeImageIdSSMParam:
+    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+    Default: /aws/service/eks/optimized-ami/1.21/amazon-linux-2/recommended/image_id
+    Description: "AWS Systems Manager Parameter Store parameter of the AMI ID for the worker node instances. Change this value to match the version of Kubernetes you are using."
+  DisableIMDSv1:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "false"
+      - "true"
+  NodeInstanceType:
+    Type: String
+    Default: t3.medium
+    Description: "EC2 instance type for the node instances."
+  NodeVolumeSize:
+    Type: Number
+    Default: 50
+    Description: "Node volume size."
+  HttpPutResponseHopLimit:
+    Type: Number
+    Default: 2
+    Description: "The desired HTTP PUT response hop limit for instance metadata requests"
+Conditions:
+  HasNodeImageId: !Not
+    - "Fn::Equals":
+      - !Ref NodeImageId
+      - ""
+  IMDSv1Disabled:
+    "Fn::Equals":
+      - !Ref DisableIMDSv1
+      - "true"
+Resources:
+  NodeLaunchTemplate:
+    Type: "AWS::EC2::LaunchTemplate"
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              DeleteOnTermination: true
+              VolumeSize: !Ref NodeVolumeSize
+              VolumeType: gp2
+        IamInstanceProfile:
+          Arn:
+            Fn::ImportValue: !Sub "${IamStackName}-NodeInstanceProfileArn"
+        ImageId: !If
+          - HasNodeImageId
+          - !Ref NodeImageId
+          - !Ref NodeImageIdSSMParam
+        InstanceType: !Ref NodeInstanceType
+        KeyName: !Ref KeyName
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub "${EksControlPlaneStackName}-NodeSecurityGroup"
+        UserData: !Base64
+          "Fn::Sub": |
+            #!/bin/bash
+            set -o xtrace
+            # Inject imageGCHighThresholdPercent value unless it has already been set.
+            if ! grep -q imageGCHighThresholdPercent /etc/kubernetes/kubelet/kubelet-config.json;
+            then
+                sed -i '/"apiVersion*/a \ \ "imageGCHighThresholdPercent": 85,' /etc/kubernetes/kubelet/kubelet-config.json
+            fi
+
+            # Inject imageGCLowThresholdPercent value unless it has already been set.
+            if ! grep -q imageGCLowThresholdPercent /etc/kubernetes/kubelet/kubelet-config.json;
+            then
+                sed -i '/"imageGCHigh*/a \ \ "imageGCLowThresholdPercent": 80,' /etc/kubernetes/kubelet/kubelet-config.json
+            fi
+            /etc/eks/bootstrap.sh ${EksClusterName} ${BootstrapArguments}
+            yum install -y https://s3.${AWS::Region}.amazonaws.com/amazon-ssm-${AWS::Region}/latest/linux_amd64/amazon-ssm-agent.rpm
+            systemctl enable amazon-ssm-agent
+            systemctl start amazon-ssm-agent
+            echo "ssm-user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ssm-agent-users
+            # Set sleep time for sending success signal to ASG
+            sleep ${RollingUpdateSleepTime}
+            /opt/aws/bin/cfn-signal --exit-code $? \
+                     --stack  ${AWS::StackName} \
+                     --resource NodeGroup  \
+                     --region ${AWS::Region}
+        MetadataOptions:
+          HttpPutResponseHopLimit : !Ref HttpPutResponseHopLimit
+          HttpEndpoint: enabled
+          HttpTokens: !If
+            - IMDSv1Disabled
+            - required
+            - optional
+        TagSpecifications:
+          - ResourceType: volume
+            Tags:
+              - Key: "Name"
+                Value: !Sub ${Environment}-eks-starters-worker-node-volume
+  NodeGroup:
+    Type: "AWS::AutoScaling::AutoScalingGroup"
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref NodeLaunchTemplate
+        Version: !GetAtt NodeLaunchTemplate.LatestVersionNumber
+      MaxSize: !Ref NodeAutoScalingGroupMaxSize
+      MinSize: !Ref NodeAutoScalingGroupMinSize
+      VPCZoneIdentifier:
+         - Fn::ImportValue: !Sub "${VpcStackName}-AppSubnet1Id"
+         - Fn::ImportValue: !Sub "${VpcStackName}-AppSubnet2Id"
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: true
+          Value: !Sub ${Environment}-eks-starters-worker-node
+        - Key: !Sub kubernetes.io/cluster/${EksClusterName}
+          PropagateAtLaunch: true
+          Value: owned
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: 1
+        MinInstancesInService: !Ref NodeAutoScalingGroupMinSize
+        MinSuccessfulInstancesPercent: 75
+        WaitOnResourceSignals: true
+        PauseTime: PT10M
+Outputs:
+  NodeAutoScalingGroup:
+    Description: The autoscaling group
+    Value: !Ref NodeGroup

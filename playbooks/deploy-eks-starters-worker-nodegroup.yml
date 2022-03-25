@@ -1,0 +1,14 @@
+---
+- name: "Create, Update or Delete EKS starters worker nodegroup stack"
+  cloudformation:
+    profile: "{{ profile }}"
+    aws_region: "{{ region }}"
+    disable_rollback: false
+    stack_name: "{{ cf_stack_names.eks_starters_nodegroup_stack_name }}"
+    state: "present"
+    create_changeset: false
+    tags:
+      Name: "{{ cf_stack_names.eks_starters_nodegroup_stack_name }}"
+    template: "cf-templates/eks-starters-worker-nodegroup.yml"
+    template_parameters: "{{ eks_starters_worker_nodegroup_parameters['cf_params'] }}"
+  register: eks_starter_worker_nodegroup_stack_results
