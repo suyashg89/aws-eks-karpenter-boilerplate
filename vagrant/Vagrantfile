@@ -1,0 +1,164 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# inline shell script to install Docker CE
+$INSTALL_DOCKER = <<-SCRIPT
+sudo apt-get -y update
+sudo apt-get -y install apt-transport-https ca-certificates curl gnupg-agent software-properties-common
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+sudo apt-get -y update
+sudo apt-get -y install docker-ce docker-ce-cli
+sudo usermod -aG docker vagrant
+SCRIPT
+
+# inline shell script to install jQ
+$INSTALL_JQ = <<-SCRIPT
+sudo apt-get -y install jq
+SCRIPT
+
+# inline shell script to install Unzip
+$INSTALL_UNZIP = <<-SCRIPT
+sudo apt-get -y install unzip
+SCRIPT
+
+# inline shell script to install AWS CLI v2
+$INSTALL_AWS_CLI2 = <<-SCRIPT
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb"
+sudo dpkg -i session-manager-plugin.deb
+SCRIPT
+
+# inline shell script to install kubectl CLI
+$INSTALL_KUBECTL = <<-SCRIPT
+curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
+chmod +x ./kubectl
+sudo mv ./kubectl /usr/local/bin/kubectl
+SCRIPT
+
+# inline shell script to install Kubectx and Kubens CLI
+$INSTALL_KUBECTX_KUBENS = <<-SCRIPT
+sudo git clone https://github.com/ahmetb/kubectx /opt/kubectx
+sudo ln -s /opt/kubectx/kubectx /usr/local/bin/kubectx
+sudo ln -s /opt/kubectx/kubens /usr/local/bin/kubens
+SCRIPT
+
+# inline shell script to install Helm 3 CLI
+$INSTALL_HELM = <<-SCRIPT
+curl https://baltocdn.com/helm/signing.asc | sudo apt-key add -
+echo "deb https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+sudo apt-get -y update
+sudo apt-get install helm
+SCRIPT
+
+# inline shell script to install Hashicorp Vault
+$INSTALL_VAULT = <<-SCRIPT
+curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+sudo apt-get -y update
+sudo apt-get -y install vault
+SCRIPT
+
+# inline shell script to install Python 3.6 and pip
+$INSTALL_PYTHON3_PIP = <<-SCRIPT
+sudo apt-get -y install software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa -y
+sudo apt-get -y update
+sudo apt-get -y install python3.6
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+python3.6 get-pip.py
+SCRIPT
+
+# inline shell script to install Ansible 2.9 and other necessary modules
+$INSTALL_ANSIBLE = <<-SCRIPT
+pip3 install virtualenv
+virtualenv venv
+source venv/bin/activate
+pip3 install ansible==2.9.0
+pip3 install openshift==0.11.0
+pip3 install kubernetes-validate
+pip3 install boto3
+SCRIPT
+
+# Box / OS
+VAGRANT_BOX = "ubuntu/xenial64"
+
+# Vagrant box version
+VAGRANT_BOX_VERSION = "20201210.0.0"
+
+# Memorable name for your
+VM_NAME = 'ubuntu-xenial'
+
+# Host folder to sync - path format ex - C:\\Users\\suyash\\my-workspace
+HOST_PATH = ""
+
+# Where to sync to on Guest — 'vagrant' is the default user name
+GUEST_PATH = "/my-workspace"
+
+Vagrant.configure("2") do |config|
+  
+  config.vbguest.auto_update = false
+  #config.vbguest.installer_options = { allow_kernel_upgrade: true }
+
+  config.vm.provider "virtualbox" do |v|  
+    v.name = VM_NAME
+    v.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    v.customize ["modifyvm", :id, "--natdnsproxy1", "on"]
+    v.customize ["guestproperty", "set", :id, "/VirtualBox/GuestAdd/VBoxService/--timesync-set-threshold", 10000 ]
+    v.memory = 1024
+    v.check_guest_additions = false
+  end
+
+  # Vagrant box from Hashicorp
+  config.vm.box = VAGRANT_BOX
+
+  # Vagrant box version
+  config.vm.box_version = VAGRANT_BOX_VERSION
+  
+  # Hostname of guest machine
+  config.vm.hostname = VM_NAME
+
+  config.vm.boot_timeout = 1500
+
+  # Disable default Vagrant folder
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
+  # Sync your workspace or any folder from your host machine to guest machine
+  config.vm.synced_folder HOST_PATH, GUEST_PATH,
+    mount_options: ["dmode=775,fmode=775"]
+  
+  # Copy your host machine git global config to guest machine
+  config.vm.provision "file", source: "~/.gitconfig", destination: ".gitconfig"
+
+  # Install Docker
+  config.vm.provision "shell", inline: $INSTALL_DOCKER
+
+  # Install jQ
+  config.vm.provision "shell", inline: $INSTALL_JQ
+
+  # Install Unzip
+  config.vm.provision "shell", inline: $INSTALL_UNZIP
+
+  # Install AWS CLI v2
+  config.vm.provision "shell", inline: $INSTALL_AWS_CLI2
+
+  # Install Kubectl CLI
+  config.vm.provision "shell", inline: $INSTALL_KUBECTL
+
+  # Install Kubectx and Kubens
+  config.vm.provision "shell", inline: $INSTALL_KUBECTX_KUBENS
+
+  # Install Helm CLI
+  config.vm.provision "shell", inline: $INSTALL_HELM
+
+  # Install Vault
+  config.vm.provision "shell", inline: $INSTALL_VAULT 
+
+  # Install Python3.6 and pip
+  config.vm.provision "shell", inline: $INSTALL_PYTHON3_PIP
+
+  # Install Ansible and other modules
+  config.vm.provision "shell", inline: $INSTALL_ANSIBLE
+end
