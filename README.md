@@ -198,3 +198,5 @@ When you check the logs by running below command, you should be able to see that
 - [Karpenter AWS News Blog](https://aws.amazon.com/blogs/aws/introducing-karpenter-an-open-source-high-performance-kubernetes-cluster-autoscaler/).
 - [Karpenter best practices for Amazon EKS](https://aws.github.io/aws-eks-best-practices/karpenter/).
 - [Amazon EKS official documentation](https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html)
+
+--<<EDIT>>--
