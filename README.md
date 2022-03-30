@@ -30,7 +30,7 @@ It is very important to understand the directory structure of this repo so that 
 ├── local.yml
 ├── playbooks
 ├── README.md
-├── templates
+├── j2-templates
 ├── vagrant
 └── vars
 ```
@@ -46,7 +46,7 @@ In the above tree, the directories and files are as below:-
 - `local.yml` is the master plabook which is used for pull-based Ansible setup.
 - `playbooks` holds Ansible playbooks orchestrating the infrastructure deployment.
 - `README.md` which you are currently reading :grin:.
-- `templates` holds environment agnostic Jinja2 templates which are used by Ansible playbooks in `playbooks` directory to deploy infrastructure.
+- `j2-templates` holds environment agnostic Jinja2 templates which are used by Ansible playbooks in `playbooks` directory to deploy infrastructure.
 - `vagrant` holds vagrantfile which can help you to setup a local linux VM having all necessary tools as described in [Configure Your System](#configure-your-system).
 - `vars` holds YAML variable file(s) which have static paramters used by Ansible playbooks in `playbooks` directory to deploy infrastructure.
 
