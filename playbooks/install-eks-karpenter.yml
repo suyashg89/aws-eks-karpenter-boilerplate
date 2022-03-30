@@ -33,16 +33,16 @@
 
 - name: Templating karpenter-k8s-provisioners.j2 to karpenter-k8s-provisioners.yml manifest
   template:
-    src: templates/karpenter-k8s-provisioners.j2
-    dest: templates/karpenter-k8s-provisioners.yml
+    src: j2-templates/karpenter-k8s-provisioners.j2
+    dest: j2-templates/karpenter-k8s-provisioners.yml
     
 - name: Create Provisioners k8s CRD for Karpenter
   k8s:
     state: present
-    src: templates/karpenter-k8s-provisioners.yml
+    src: j2-templates/karpenter-k8s-provisioners.yml
 
 - name: Delete templated files
   file:
-    path: templates/karpenter-k8s-provisioners.yml
+    path: j2-templates/karpenter-k8s-provisioners.yml
     state: absent
     force: yes

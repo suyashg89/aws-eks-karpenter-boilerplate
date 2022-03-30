@@ -26,16 +26,16 @@
 
 - name: Template aws-auth config file
   template:
-    src: templates/aws-auth.j2
-    dest: templates/aws-auth.yml
+    src: j2-templates/aws-auth.j2
+    dest: j2-templates/aws-auth.yml
 
 - name: Create aws-auth config
   k8s:
     state: present
-    src: templates/aws-auth.yml
+    src: j2-templates/aws-auth.yml
 
 - name: Delete templated files
   file:
-    path: templates/aws-auth.yml
+    path: j2-templates/aws-auth.yml
     state: absent
     force: yes
