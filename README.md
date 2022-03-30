@@ -12,7 +12,6 @@ The IAC in this repository is a boilerplate to orchestrate the deployment of **K
 - Starters nodes in Amazon EC2 autoscaling group.
 - `aws-auth` k8s configmap to join new worker nodes to EKS control plane.
 - Install `karpenter` helm-charts in EKS cluster along with its pre-requisites in AWS.
-- Deploy a sample pod `inflate` to test automated worker node provisioning by karpenter.
 
 ## Pre-requisites
 
@@ -183,7 +182,7 @@ If you want to review the deployment of each infrastructure component, please fo
 
 An example `inflate` pods deployment can be created in the newly created EKS cluster by running below command:-
 
-`ansible-playbook -e "profile=PROFILE env=ENV" local.yml -vv --tags example_inflate_pods`
+`kubectl apply -f examples/inflate.yml`
 
 Now scale up the deployment to create new inflate pods by running the below command:-
 

@@ -74,8 +74,3 @@
         - install_eks_karpenter
         - never
         - run_all
-    
-    - include: playbooks/deploy-example-inflate-pods.yml
-      tags:
-        - example_inflate_pods
-        - never
