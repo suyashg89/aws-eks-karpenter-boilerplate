@@ -1,8 +1,8 @@
-# Karpenter Autoscaler for Amazon EKS - Boilerplate IaC
+# Karpenter Autoscaler for Amazon EKS - Boilerplate IAC
 
 Karpenter is an open-source, flexible, high-performance Kubernetes cluster autoscaler built with AWS. It helps improve your application availability and cluster efficiency by rapidly launching right-sized compute resources in response to changing application load. Karpenter also provides just-in-time compute resources to meet your application’s needs and will soon automatically optimize a cluster’s compute resource footprint to reduce costs and improve performance. When Karpenter is installed in your cluster, Karpenter observes the aggregate resource requests of unscheduled pods and makes decisions to launch new nodes and terminate them to reduce scheduling latencies and infrastructure costs. Karpenter does this by observing events within the Kubernetes cluster and then sending commands to the underlying cloud provider’s compute service, such as Amazon EC2.
 
-The IaC in this repository is a boilerplate to orchestrate the deployment of **Karpenter** along with following resources in your AWS account using Ansible playbooks and AWS Cloudformation stacks:-
+The IAC in this repository is a boilerplate to orchestrate the deployment of **Karpenter** along with following resources in your AWS account using Ansible playbooks and AWS Cloudformation stacks:-
 
 - A VPC spread across two AZs with multiple subnets for APP, DB and WEB tiers.
 - S3 bucket to store infrastructure files.
@@ -18,7 +18,7 @@ The IaC in this repository is a boilerplate to orchestrate the deployment of **K
 
 ### Understanding Repository Directories
 
-It is very important to understand the directory structure of this repo so that you can use the IaC easily to deploy the infrastructure and install Karpenter in Amazon EKS cluster.
+It is very important to understand the directory structure of this repo so that you can use the IAC easily to deploy the infrastructure and install Karpenter in Amazon EKS cluster.
 
 ```bash
 ├── ansible
@@ -52,7 +52,7 @@ In the above tree, the directories and files are as below:-
 
 ### Configure Your System
 
-Your local system should be configured as below to help you use the IaC to deploy the infrastructure:-
+Your local system should be configured as below to help you use the IAC to deploy the infrastructure:-
 
 - AWS CLI v2.
 - AWS profile configured with an IAM user/role having AWS account admin access.
@@ -89,7 +89,7 @@ You are ofcourse allowed to change the values of other variables as per your req
 
 ## Karpenter Specifics
 
-The necessary IaC files for Karpenter service are as below:-
+The necessary IAC files for Karpenter service are as below:-
 
 - `<ENV>.yml` var file where `<ENV>` is your chosen environment name, for example in this repository, we have `sandbox.yml`. It holds the karpenter related variables as below which can be updated as per requirement:-
 
@@ -99,7 +99,7 @@ eks_karpenter_parameters:
     Environment: "{{ env }}"
     EksControlPlaneStackName: "{{ cf_stack_names.eks_control_plane_stack_name }}"
     EksClusterName: "{{ eks_cluster_name }}"
-    LaunchTemplateName: "{{ env }}-eks-worker-node-template"
+    LaunchTemplateName: "{{ env }}-eks-karpenter-worker-node-template"
     NodeImageId: "{{ eks_node_ami_id }}"
     NodeVolumeSize: "50"
     KeyName: "{{ ec2_keypair_name }}"
@@ -196,5 +196,6 @@ When you check the logs by running below command, you should be able to see that
 ## Guides & Sources
 
 - [Karpenter official documentation](https://karpenter.sh/docs/).
+- [Karpenter AWS News Blog](https://aws.amazon.com/blogs/aws/introducing-karpenter-an-open-source-high-performance-kubernetes-cluster-autoscaler/).
 - [Karpenter best practices for Amazon EKS](https://aws.github.io/aws-eks-best-practices/karpenter/).
 - [Amazon EKS official documentation](https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html)
