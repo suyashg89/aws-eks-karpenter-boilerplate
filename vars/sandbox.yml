@@ -115,7 +115,7 @@ eks_karpenter_parameters:
     KeyName: "{{ ec2_keypair_name }}"
     HttpPutResponseHopLimit: "1"
     DisableIMDSv1: "true"
-  karpenter_helm_charts_version: v0.6.5
+  karpenter_helm_charts_version: v0.10.0
   provisioners:
     - name: "general-purpose"
       ec2_instance_type: "'m5.xlarge', 'm5.2xlarge', 'm5.4xlarge'"
