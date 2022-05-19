@@ -77,9 +77,9 @@ The Ansible playbooks in this repository requires below three runtime variables 
 
 The `vars` directory in the root of this repository contains variable file `sandbox.yml` which holds all the static variables with their values that are used by the Ansible playbooks in `playbooks` directory to deploy infrastructure. The name of the variable file depends on what you name your environment and pass its value to `env` runtime variable. Please make sure to update below variables in the variable file:-
 
-- `aws_account_number` - Your AWS account ID
-- `region` - Your preferred AWS region, ex- `eu-west-1`
-- `eks_infra_bucket` - Your chosen Amazon S3 bucket name to store Lambda functions and can also be used to store other infrastructure related objects. 
+- `aws_account_number` - Your AWS account ID.
+- `region` - Your preferred AWS region, ex- `eu-west-1`.
+- `eks_infra_bucket` - Your chosen Amazon S3 bucket name to store Lambda functions and can also be used to store other infrastructure related objects.
 - `eks_cluster_name` - Your chosen Amazon EKS cluster name.
 - `ec2_keypair_name` - Amazon EC2 SSH keypair to attach in EKS worker nodes.
 - `eks_node_ami_id` - Amazon EKS optimized worker node AMI ID.
