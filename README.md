@@ -192,7 +192,7 @@ When you check the logs by running below command, you should be able to see that
 
 `kubectl logs -f -n karpenter -l app.kubernetes.io/name=karpenter -c controller`
 
-## Guides & Sources
+## References
 
 - [Karpenter official documentation](https://karpenter.sh/docs/).
 - [Karpenter AWS News Blog](https://aws.amazon.com/blogs/aws/introducing-karpenter-an-open-source-high-performance-kubernetes-cluster-autoscaler/).
