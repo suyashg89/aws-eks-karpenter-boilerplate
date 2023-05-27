@@ -12,7 +12,7 @@ Parameters:
     Default: ""
   KubernetesVersion:
     Type: String
-    Default: "1.21"
+    Default: "1.22"
   EksEncryptSecrets:
     Type: String
     AllowedValues: [Enabled, Disabled]
